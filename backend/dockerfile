@@ -1,11 +1,22 @@
 FROM php:8.3-apache
 
+# Install PDO MySQL extension
 RUN docker-php-ext-install pdo pdo_mysql
 
+# Enable Apache mod_rewrite
 RUN a2enmod rewrite
+
+# CRITICAL: Allow Apache to read .htaccess files (disabled by default in official PHP Apache image)
+RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+
+# Set Apache DocumentRoot to public directory (OPTIONAL: Only if your index.php is inside a public/ folder)
+# ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+# RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+# RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/conf-available/*.conf
 
 COPY . /var/www/html/
 
+# Set up upload/logs directories and permissions
 RUN mkdir -p /var/www/html/uploads/logs \
     && chown -R www-data:www-data /var/www/html/uploads
 

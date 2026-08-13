@@ -1,28 +1,31 @@
 <?php
 /**
- * One-off migration: imports the old localStorage-era JSON fixtures into
- * MySQL. Run from the command line, NOT as a web request:
+ * One-off migration: imports localStorage JSON fixtures into MySQL / TiDB.
  *
+ * CLI Usage:
  *   php migrate.php /path/to/users.json /path/to/logs.json /path/to/comments.json
  *
- * All three args are optional — pass '-' to skip one (e.g. if you're
- * starting logs empty but still want to import users).
- *
- * KNOWN LIMITATION: the old app only ever stored a vote *count* per log,
- * never who voted. This script sets logs.vote_count directly from that
- * number, but cannot create matching rows in the `votes` table (there's no
- * source data for who cast them). Practical effect: vote counts display
- * correctly, but the one-vote-per-user constraint has no history to
- * enforce against for pre-migration votes — anyone can vote once more on
- * migrated entries even if they'd already "voted" in the old system.
+ * Web Usage (Fallback):
+ *   https://your-app.onrender.com/migrate.php?key=YOUR_SECRET_KEY
  */
-require_once __DIR__ . '/../config/db.php';
+
+require_once __DIR__ . '/../bootstrap.php';
+
+// If run from web browser, require a simple secret key check
+if (php_sapi_name() !== 'cli') {
+    header('Content-Type: text/plain');
+    $secret = getenv('MIGRATE_SECRET') ?: 'sees-migration-2026';
+    if (($_GET['key'] ?? '') !== $secret) {
+        http_response_code(403);
+        die("Access denied. Invalid migration key.\n");
+    }
+}
 
 $db = getDbConnection();
 
-$usersPath = $argv[1] ?? '-';
-$logsPath = $argv[2] ?? '-';
-$commentsPath = $argv[3] ?? '-';
+$usersPath    = $argv[1] ?? __DIR__ . '/fixtures/users.json';
+$logsPath     = $argv[2] ?? __DIR__ . '/fixtures/logs.json';
+$commentsPath = $argv[3] ?? __DIR__ . '/fixtures/comments.json';
 
 function readJson(string $path): ?array {
     if ($path === '-' || !file_exists($path)) return null;
@@ -33,42 +36,58 @@ function readJson(string $path): ?array {
 // ---- Users ----
 $usernameToId = [];
 
+// Pre-load all existing users from database into memory
+foreach ($db->query('SELECT id, username FROM users') as $row) {
+    $usernameToId[$row['username']] = (int) $row['id'];
+}
+
 $users = readJson($usersPath);
 if ($users !== null) {
     echo "Importing " . count($users) . " users...\n";
-    $stmt = $db->prepare('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)
-                           ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)');
+    
+    $checkStmt  = $db->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+    $insertStmt = $db->prepare('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)');
+
     foreach ($users as $u) {
-        // Old fixtures stored plaintext passwords (acceptable for the
-        // no-backend prototype) — hash properly now, on the way in
+        $username = $u['username'];
+        
+        // Check if user already exists in DB
+        $checkStmt->execute([$username]);
+        $existingId = $checkStmt->fetchColumn();
+
+        if ($existingId) {
+            $usernameToId[$username] = (int) $existingId;
+            continue;
+        }
+
         $hash = password_hash($u['password'] ?? bin2hex(random_bytes(8)), PASSWORD_DEFAULT);
-        $stmt->execute([
-            $u['username'],
-            $u['email'] ?? ($u['username'] . '@migrated.local'),
+        $insertStmt->execute([
+            $username,
+            $u['email'] ?? ($username . '@migrated.local'),
             $hash,
             $u['role'] ?? 'member',
         ]);
-        $usernameToId[$u['username']] = (int) $db->lastInsertId();
+        $usernameToId[$username] = (int) $db->lastInsertId();
     }
-    echo "  Done. " . count($usernameToId) . " accounts ready (passwords re-hashed, originals not preserved).\n";
+    echo "  Done. " . count($usernameToId) . " user accounts active.\n";
 } else {
-    echo "Skipping users (no file given or not found).\n";
-    // Still need id lookups for logs/comments below, so pull any existing users
-    foreach ($db->query('SELECT id, username FROM users') as $row) {
-        $usernameToId[$row['username']] = (int) $row['id'];
-    }
+    echo "Skipping users JSON (file not found or skipped).\n";
 }
 
 function getOrCreateUserId(PDO $db, array &$map, string $username): int {
     if (isset($map[$username])) return $map[$username];
 
-    // Referenced by a log/comment but never appeared in users.json —
-    // create a minimal placeholder account rather than dropping their data
     $stmt = $db->prepare('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)');
-    $stmt->execute([$username, "{$username}@migrated.local", password_hash(bin2hex(random_bytes(8)), PASSWORD_DEFAULT), 'member']);
+    $stmt->execute([
+        $username, 
+        "{$username}@migrated.local", 
+        password_hash(bin2hex(random_bytes(8)), PASSWORD_DEFAULT), 
+        'member'
+    ]);
+    
     $id = (int) $db->lastInsertId();
     $map[$username] = $id;
-    echo "  Created placeholder account for referenced-but-missing user \"{$username}\".\n";
+    echo "  Created placeholder account for user \"{$username}\".\n";
     return $id;
 }
 
@@ -83,6 +102,7 @@ if ($logs !== null) {
          party_members, difficulty, exploration_goal, outcome, strategy_notes, overall_notes,
          shadows, gatekeeper, treasure, shuffle_time, discoveries, custom_info, vote_count)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    
     $mediaStmt = $db->prepare('INSERT INTO log_media (log_id, type, url, caption, position) VALUES (?, ?, ?, ?, ?)');
 
     foreach ($logs as $log) {
@@ -91,7 +111,7 @@ if ($logs !== null) {
         $insertStmt->execute([
             $authorId,
             $log['title'] ?? null,
-            $log['date'],
+            $log['date'] ?? date('Y-m-d'),
             $log['block'] ?? '',
             $log['floor'] ?? ($log['startFloor'] ?? 0),
             $log['startFloor'] ?? null,
@@ -114,7 +134,9 @@ if ($logs !== null) {
         ]);
 
         $newId = (int) $db->lastInsertId();
-        $oldIdToNewId[$log['id']] = $newId; // old string UUID -> new int id
+        if (isset($log['id'])) {
+            $oldIdToNewId[$log['id']] = $newId;
+        }
 
         foreach ($log['media'] ?? [] as $i => $item) {
             if (empty($item['url'])) continue;
@@ -123,7 +145,7 @@ if ($logs !== null) {
     }
     echo "  Done. " . count($oldIdToNewId) . " logs imported.\n";
 } else {
-    echo "Skipping logs (no file given or not found).\n";
+    echo "Skipping logs JSON (file not found or skipped).\n";
 }
 
 // ---- Comments ----
@@ -137,7 +159,7 @@ if ($comments !== null) {
     foreach ($comments as $oldLogId => $commentList) {
         if (!isset($oldIdToNewId[$oldLogId])) {
             $skipped += count($commentList);
-            continue; // comments for a log that wasn't imported (or logs.json was skipped)
+            continue;
         }
         $newLogId = $oldIdToNewId[$oldLogId];
 
@@ -152,13 +174,9 @@ if ($comments !== null) {
             $imported++;
         }
     }
-    echo "  Done. {$imported} comments imported" . ($skipped ? ", {$skipped} skipped (log not found)" : '') . ".\n";
+    echo "  Done. {$imported} comments imported" . ($skipped ? ", {$skipped} skipped" : '') . ".\n";
 } else {
-    echo "Skipping comments (no file given or not found).\n";
+    echo "Skipping comments JSON (file not found or skipped).\n";
 }
 
 echo "\nMigration complete.\n";
-if ($users !== null) {
-    echo "IMPORTANT: original plaintext passwords were not preserved (they were hashed on import).\n";
-    echo "Migrated users will need to reset their password, or you'll need to tell them their old password still works (it does — same value, just now hashed).\n";
-}

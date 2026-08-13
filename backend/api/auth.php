@@ -162,5 +162,18 @@ if ($action === 'logout') {
     ]);
 }
 
+// Check if session ID was received and if user data is inside
+if (!isset($_SESSION['user_id'])) {
+    // Check if the cookie was even received by PHP
+    $receivedCookie = $_COOKIE['PHPSESSID'] ?? 'NO_COOKIE_RECEIVED';
+    
+    http_response_code(401);
+    echo json_encode([
+        'error' => 'Not authenticated.',
+        'debug_cookie' => $receivedCookie,
+        'debug_session_id' => session_id()
+    ]);
+    exit();
+}
 
 jsonError('Unknown authentication action.', 404);
