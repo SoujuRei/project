@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "date": "2009-04-10",
+    "title": "SEES Reports Unusual Activity on Block Arqa",
+    "content": "Members exploring the upper reaches of Arqa report a spike in Shadow density. Caution advised.",
+    "category": "Anomaly Report"
+  },
+  {
+    "id": 2,
+    "date": "2009-04-30",
+    "title": "Full Moon Operation Scheduled",
+    "content": "A large Shadow signature has been detected. All available members are to report for the operation.",
+    "category": "Full Moon Operation"
+  },
+  {
+    "id": 3,
+    "date": "2009-05-02",
+    "title": "Access to Yabbashah Confirmed",
+    "content": "The barrier blocking Yabbashah has dissolved. Members may now proceed past the previous limit.",
+    "category": "Block Transition"
+  },
+  {
+    "id": 4,
+    "date": "2009-05-07",
+    "title": "Elizabeth Requests New Deliverables",
+    "content": "The Velvet Room has issued new requests for rare materials and unusual treasures. Prepare for a longer outing.",
+    "category": "Elizabeth Request"
+  },
+  {
+    "id": 5,
+    "date": "2009-05-09",
+    "title": "General Announcement: Supply Drop Arrives",
+    "content": "Medical supplies and support items have been delivered to the dormitory for the next operation window.",
+    "category": "General Announcement"
+  },
+  {
+    "id": 6,
+    "date": "2009-05-12",
+    "title": "Tziah Route Survey Completed",
+    "content": "The latest route survey confirmed a safer corridor through Tziah. Scouts recommend bringing a party with strong magic support.",
+    "category": "Block Transition"
+  },
+  {
+    "id": 7,
+    "date": "2009-05-15",
+    "title": "Mission Update: Aigis to Lead Scout Team",
+    "content": "Aigis has been assigned to the lead scout team for the next expedition into Harabah. Expect stricter route planning and more detailed field reports.",
+    "category": "Mission Update"
+  },
+  {
+    "id": 8,
+    "date": "2009-05-18",
+    "title": "Dormitory Notice: Restock Complete",
+    "content": "Emergency restoratives, antidotes, and new combat gear have arrived at the dormitory after the previous supply delay.",
+    "category": "Dormitory Notice"
+  }
+]

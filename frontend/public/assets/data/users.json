@@ -1,0 +1,5 @@
+[
+  { "username": "makoto", "email": "makoto@gekkoukan.edu", "password": "moonlight", "role": "member" },
+  { "username": "junpei", "email": "junpei@gekkoukan.edu", "password": "baseball1", "role": "member" },
+  { "username": "admin", "email": "admin@sees.local", "password": "changeme123", "role": "admin" }
+]

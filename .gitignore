@@ -1,0 +1,11 @@
+.env
+settings.php
+isrgrootx1.pem
+criteria.md
+criteria.pdf
+project.md
+project.pdf
+tartarus-log-project-spec.md
+tartaruslog-backend-proposal.md
+/node_modules
+/dist
